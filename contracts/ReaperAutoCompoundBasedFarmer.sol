@@ -55,6 +55,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
     ) public initializer {
         __ReaperBaseStrategy_init(_vault, _feeRemitters, _strategists);
         want = _want;
+        poolId = _poolId;
         lpToken0 = IUniswapV2Pair(want).token0();
         lpToken1 = IUniswapV2Pair(want).token1();
         _giveAllowances();
