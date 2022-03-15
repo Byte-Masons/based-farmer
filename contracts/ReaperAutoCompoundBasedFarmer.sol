@@ -62,7 +62,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
 
     /**
      * @dev Withdraws funds and sents them back to the vault.
-     * It withdraws {want} from the Solidly LP Depositor
+     * It withdraws {want} from the Based MasterChef
      * The available {want} minus fees is returned to the vault.
      */
     function withdraw(uint256 _amount) external {
@@ -136,7 +136,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
     }
 
     /**
-     * @dev Pauses supplied. Withdraws all funds from the LP Depositor, leaving rewards behind.
+     * @dev Pauses supplied. Withdraws all funds from the MasterChef.
      */
     function panic() external {
         _onlyStrategistOrOwner();
@@ -166,7 +166,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
     /**
      * @dev Function that puts the funds to work.
      * It gets called whenever someone supplied in the strategy's vault contract.
-     * It supplies {want} to farm {SOLIDLY} and {SOLIDEX}
+     * It supplies {want} to farm {BSHARE}
      */
     function deposit() public whenNotPaused {
         uint256 wantBal = IERC20Upgradeable(want).balanceOf(address(this));
@@ -178,14 +178,14 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
 
     /**
      * @dev Calculates the total amount of {want} held by the strategy
-     * which is the balance of want + the total amount supplied to Solidex.
+     * which is the balance of want + the total amount supplied.
      */
     function balanceOf() public view override returns (uint256) {
         return balanceOfWant() + balanceOfPool();
     }
 
     /**
-     * @dev Calculates the total amount of {want} held in the Solidex LP Depositor
+     * @dev Calculates the total amount of {want} held in the MasterChef
      */
     function balanceOfPool() public view returns (uint256) {
         (uint256 _amount,) = IMasterChef(MASTER_CHEF).userInfo(poolId, address(this));
@@ -201,11 +201,10 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
 
     /**
      * @dev Core function of the strat, in charge of collecting and re-investing rewards.
-     * 1. Claims {SOLIDLY} and {SOLIDEX} from the MasterChef.
-     * 2. Swaps rewards to {WFTM}.
-     * 3. Claims fees for the harvest caller and treasury.
-     * 4. Swaps the {WFTM} token for {want}
-     * 5. Deposits.
+     * 1. Claims {BSHARE} from the MasterChef.
+     * 2. Charges fees for the harvest caller and treasury.
+     * 3. Converts tokens to {want}.
+     * 4. Deposits in the MasterChef.
      */
     function _harvestCore() internal override {
         _claimRewards();
@@ -279,7 +278,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         // want -> MASTER_CHEF
         uint256 wantAllowance = type(uint256).max - IERC20Upgradeable(want).allowance(address(this), MASTER_CHEF);
         IERC20Upgradeable(want).safeIncreaseAllowance(MASTER_CHEF, wantAllowance);
-        // // rewardTokens -> SPOOKY_ROUTER
+        // // reward token -> SPOOKY_ROUTER
         uint256 bshareAllowance = type(uint256).max -
             IERC20Upgradeable(BSHARE).allowance(address(this), SPOOKY_ROUTER);
         IERC20Upgradeable(BSHARE).safeIncreaseAllowance(SPOOKY_ROUTER, bshareAllowance);
