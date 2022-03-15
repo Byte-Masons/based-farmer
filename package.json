@@ -1,21 +1,21 @@
 {
-  "name": "solidex-farmer",
+  "name": "based-farmer",
   "version": "1.0.0",
-  "description": "LP farming strategy for Solidex",
+  "description": "LP farming strategy for Based protocol",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/m-brantheim/solidex-farmer.git"
+    "url": "git+https://github.com/m-brantheim/based-farmer.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/m-brantheim/solidex-farmer/issues"
+    "url": "https://github.com/m-brantheim/based-farmer/issues"
   },
-  "homepage": "https://github.com/m-brantheim/solidex-farmer#readme",
+  "homepage": "https://github.com/m-brantheim/based-farmer#readme",
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.0",
     "@nomiclabs/hardhat-etherscan": "^2.1.3",
