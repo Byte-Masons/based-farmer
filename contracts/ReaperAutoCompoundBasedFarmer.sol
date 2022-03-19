@@ -9,7 +9,7 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeab
 pragma solidity 0.8.11;
 
 /**
- * @dev This strategy will farm Based LPs on Spooky and autocompound rewards
+ * @dev This strategy will farm Based LPs on Tombswap and autocompound rewards
  */
 contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -21,22 +21,22 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
      * {want} - The vault token the strategy is maximizing
      * {lpToken0} - Token 0 of the LP want token
      * {lpToken1} - Token 1 of the LP want token
-     * {bShareUnderlying} - Whether {BSHARE} is one of the lp tokens
      */
     address public constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     address public constant BSHARE = 0x49C290Ff692149A4E16611c694fdED42C954ab7a;
     address public want;
     address public lpToken0;
     address public lpToken1;
-    bool public bShareUnderlying;
 
     /**
      * @dev Third Party Contracts:
      * {MASTER_CHEF} - The Based MasterChef for staking LPs and collecting rewards
      * {SPOOKY_ROUTER} - Spooky router for swapping tokens
+     * {TOMBSWAP_ROUTER} - Tombswap router for adding liquidity
      */
     address public constant MASTER_CHEF = 0xAc0fa95058616D7539b6Eecb6418A68e7c18A746;
     address public constant SPOOKY_ROUTER = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
+    address public constant TOMBSWAP_ROUTER = 0x6d0176c5ea1e44b08d3dd001b0784ce42f47a3a7;
 
     /**
      * @dev Based variables:
@@ -60,9 +60,6 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         poolId = _poolId;
         lpToken0 = IUniswapV2Pair(want).token0();
         lpToken1 = IUniswapV2Pair(want).token1();
-        if (lpToken0 == BSHARE || lpToken1 == BSHARE) {
-            bShareUnderlying = true;
-        }
         _giveAllowances();
     }
 
@@ -124,9 +121,6 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         _onlyStrategistOrOwner();
 
         _claimRewards();
-        if (!bShareUnderlying) {
-            _swapTokens(BSHARE, WFTM, IERC20Upgradeable(BSHARE).balanceOf(address(this)));
-        }
         _addLiquidity();
 
         uint256 poolBalance = balanceOfPool();
@@ -210,7 +204,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
      */
     function _harvestCore() internal override {
         _claimRewards();
-        _swapAndChargeFees();
+        _chargeFees();
         _addLiquidity();
         deposit();
     }
@@ -226,7 +220,8 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
     function _swapTokens(
         address _from,
         address _to,
-        uint256 _amount
+        uint256 _amount,
+        address _router
     ) internal {
         if (_from == _to || _amount == 0) {
             return;
@@ -235,7 +230,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         address[] memory path = new address[](2);
         path[0] = _from;
         path[1] = _to;
-        IUniswapV2Router02(SPOOKY_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        IUniswapV2Router02(_router).swapExactTokensForTokensSupportingFeeOnTransferTokens(
             _amount,
             0,
             path,
@@ -248,44 +243,36 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
      * @dev Core harvest function.
      * Charges fees based on the amount of WFTM gained from reward
      */
-    function _swapAndChargeFees() internal {
-        uint256 wftmFee;
-        if (bShareUnderlying) {
-            uint256 bshareFee = (IERC20Upgradeable(BSHARE).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
-            _swapTokens(BSHARE, WFTM, bshareFee);
-            wftmFee = IERC20Upgradeable(WFTM).balanceOf(address(this));
-        } else {
-            _swapTokens(BSHARE, WFTM, IERC20Upgradeable(BSHARE).balanceOf(address(this)));
-            wftmFee = (IERC20Upgradeable(WFTM).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
+    function _chargeFees() internal {
+        uint256 bshareFee = (IERC20Upgradeable(BSHARE).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
+        if (bshareFee != 0) {
+            _swapTokens(BSHARE, WFTM, bshareFee, SPOOKY_ROUTER);
+            uint256 wftmFee = IERC20Upgradeable(WFTM).balanceOf(address(this));
+            uint256 callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
+            uint256 treasuryFeeToVault = (wftmFee * treasuryFee) / PERCENT_DIVISOR;
+            uint256 feeToStrategist = (treasuryFeeToVault * strategistFee) / PERCENT_DIVISOR;
+            treasuryFeeToVault -= feeToStrategist;
+
+            IERC20Upgradeable(WFTM).safeTransfer(msg.sender, callFeeToUser);
+            IERC20Upgradeable(WFTM).safeTransfer(treasury, treasuryFeeToVault);
+            IERC20Upgradeable(WFTM).safeTransfer(strategistRemitter, feeToStrategist);
         }
-
-        if (wftmFee == 0) {
-            return;
-        }
-
-        uint256 callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
-        uint256 treasuryFeeToVault = (wftmFee * treasuryFee) / PERCENT_DIVISOR;
-        uint256 feeToStrategist = (treasuryFeeToVault * strategistFee) / PERCENT_DIVISOR;
-        treasuryFeeToVault -= feeToStrategist;
-
-        IERC20Upgradeable(WFTM).safeTransfer(msg.sender, callFeeToUser);
-        IERC20Upgradeable(WFTM).safeTransfer(treasury, treasuryFeeToVault);
-        IERC20Upgradeable(WFTM).safeTransfer(strategistRemitter, feeToStrategist);
     }
 
     /** @dev Converts WFTM to both sides of the LP token and builds the liquidity pair */
     function _addLiquidity() internal {
-        uint256 balance = IERC20Upgradeable(bShareUnderlying ? BSHARE : WFTM).balanceOf(address(this));
-        if (balance == 0) {
+        uint256 bshareBalance = IERC20Upgradeable(BSHARE).balanceOf(address(this));
+        if (bshareBalance == 0) {
             return;
         }
 
-        _swapTokens(bShareUnderlying ? BSHARE : WFTM, lpToken0, balance / 2);
-        _swapTokens(bShareUnderlying ? BSHARE : WFTM, lpToken1, balance / 2);
+        _swapTokens(BSHARE, lpToken0, bshareBalance, SPOOKY_ROUTER);
+        uint256 lp0Balance = IERC20Upgradeable(lpToken0).balanceOf(address(this));
+        _swapTokens(lpToken0, lpToken1, lp0Balance / 2, TOMBSWAP_ROUTER);
 
         uint256 lp0Bal = IERC20Upgradeable(lpToken0).balanceOf(address(this));
         uint256 lp1Bal = IERC20Upgradeable(lpToken1).balanceOf(address(this));
-        IUniswapV2Router02(SPOOKY_ROUTER).addLiquidity(
+        IUniswapV2Router02(TOMBSWAP_ROUTER).addLiquidity(
             lpToken0,
             lpToken1,
             lp0Bal,
@@ -310,11 +297,11 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         // WFTM -> SPOOKY_ROUTER
         uint256 wftmAllowance = type(uint256).max - IERC20Upgradeable(WFTM).allowance(address(this), SPOOKY_ROUTER);
         IERC20Upgradeable(WFTM).safeIncreaseAllowance(SPOOKY_ROUTER, wftmAllowance);
-        // LP tokens -> SPOOKY_ROUTER
-        uint256 lp0Allowance = type(uint256).max - IERC20Upgradeable(lpToken0).allowance(address(this), SPOOKY_ROUTER);
-        IERC20Upgradeable(lpToken0).safeIncreaseAllowance(SPOOKY_ROUTER, lp0Allowance);
-        uint256 lp1Allowance = type(uint256).max - IERC20Upgradeable(lpToken1).allowance(address(this), SPOOKY_ROUTER);
-        IERC20Upgradeable(lpToken1).safeIncreaseAllowance(SPOOKY_ROUTER, lp1Allowance);
+        // LP tokens -> TOMBSWAP_ROUTER
+        uint256 lp0Allowance = type(uint256).max - IERC20Upgradeable(lpToken0).allowance(address(this), TOMBSWAP_ROUTER);
+        IERC20Upgradeable(lpToken0).safeIncreaseAllowance(TOMBSWAP_ROUTER, lp0Allowance);
+        uint256 lp1Allowance = type(uint256).max - IERC20Upgradeable(lpToken1).allowance(address(this), TOMBSWAP_ROUTER);
+        IERC20Upgradeable(lpToken1).safeIncreaseAllowance(TOMBSWAP_ROUTER, lp1Allowance);
     }
 
     /**
@@ -334,12 +321,12 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
             IERC20Upgradeable(WFTM).allowance(address(this), SPOOKY_ROUTER)
         );
         IERC20Upgradeable(lpToken0).safeDecreaseAllowance(
-            SPOOKY_ROUTER,
-            IERC20Upgradeable(lpToken0).allowance(address(this), SPOOKY_ROUTER)
+            TOMBSWAP_ROUTER,
+            IERC20Upgradeable(lpToken0).allowance(address(this), TOMBSWAP_ROUTER)
         );
         IERC20Upgradeable(lpToken1).safeDecreaseAllowance(
-            SPOOKY_ROUTER,
-            IERC20Upgradeable(lpToken1).allowance(address(this), SPOOKY_ROUTER)
+            TOMBSWAP_ROUTER,
+            IERC20Upgradeable(lpToken1).allowance(address(this), TOMBSWAP_ROUTER)
         );
     }
 }
