@@ -36,7 +36,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
      */
     address public constant MASTER_CHEF = 0xAc0fa95058616D7539b6Eecb6418A68e7c18A746;
     address public constant SPOOKY_ROUTER = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
-    address public constant TOMBSWAP_ROUTER = 0x6d0176c5ea1e44b08d3dd001b0784ce42f47a3a7;
+    address public constant TOMBSWAP_ROUTER = 0x6D0176C5ea1e44b08D3dd001b0784cE42F47a3A7;
 
     /**
      * @dev Based variables:
