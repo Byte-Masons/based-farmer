@@ -68,7 +68,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         liquidityToken = _liquidityToken;
         liquidityIndex = _liquidityIndex;
         poolId = _poolId;
-        receiptToken = ICurveLiquidityPool(liquidityPool).token();
+        receiptToken = ICurveLiquidityPool(liquidityPool).lp_token();
         _giveAllowances();
     }
 

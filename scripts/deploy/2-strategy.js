@@ -1,7 +1,7 @@
 const hre = require('hardhat');
 
 async function main() {
-  const vaultAddress = '';
+  const vaultAddress = '0x590c42ab202fe170704943B1756E79B6E6140EB3';
 
   const Strategy = await ethers.getContractFactory('ReaperAutoCompoundBasedFarmer');
   const treasuryAddress = '0x0e7c5313E9BB80b654734d9b7aB1FB01468deE3b';
@@ -14,7 +14,6 @@ async function main() {
   const liquidityToken = '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E';
   const liquidityIndex = 0;
   const poolId = 3;
-  const options = { gasPrice: 300000000000, gasLimit: 9000000 };
 
   const strategy = await hre.upgrades.deployProxy(
     Strategy,
@@ -28,8 +27,7 @@ async function main() {
       liquidityIndex,
       poolId,
     ],
-    { kind: 'uups', timeout: 0 },
-    options,
+    { kind: 'uups', timeout: 0, gasPrice: 300000000000, gasLimit: 9000000 },
   );
   await strategy.deployed();
   console.log('Strategy deployed to:', strategy.address);

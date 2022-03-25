@@ -9,5 +9,5 @@ interface ICurveLiquidityPool {
         bool _use_underlying
     ) external;
 
-    function token() external returns (address);
+    function lp_token() external returns (address);
 }
