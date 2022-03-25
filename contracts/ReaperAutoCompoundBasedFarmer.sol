@@ -266,9 +266,9 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
             return;
         }
 
-        _swapTokens(BSHARE, lpToken0, bshareBalance, SPOOKY_ROUTER);
-        uint256 lp0Balance = IERC20Upgradeable(lpToken0).balanceOf(address(this));
-        _swapTokens(lpToken0, lpToken1, lp0Balance / 2, TOMBSWAP_ROUTER);
+        _swapTokens(BSHARE, lpToken1, bshareBalance, SPOOKY_ROUTER);
+        uint256 lp1Balance = IERC20Upgradeable(lpToken1).balanceOf(address(this));
+        _swapTokens(lpToken1, lpToken0, lp1Balance / 2, TOMBSWAP_ROUTER);
 
         uint256 lp0Bal = IERC20Upgradeable(lpToken0).balanceOf(address(this));
         uint256 lp1Bal = IERC20Upgradeable(lpToken1).balanceOf(address(this));
