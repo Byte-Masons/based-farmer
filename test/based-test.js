@@ -26,8 +26,7 @@ describe('Vaults', function () {
   const paymentSplitterAddress = '0x63cbd4134c2253041F370472c130e92daE4Ff174';
   let treasury;
   let want;
-  const ftmTombLPAddress = '0x60a861Cd30778678E3d613db96139440Bd333143';
-  const wantAddress = ftmTombLPAddress;
+  const wantAddress = '0x172BFaA8991A54ABD0b3EE3d4F8CBDab7046FF79';
   let self;
   let wantWhale;
   let selfAddress;
@@ -42,7 +41,7 @@ describe('Vaults', function () {
         {
           forking: {
             jsonRpcUrl: 'https://rpc.ftm.tools/',
-            blockNumber: 31962239,
+            blockNumber: 34392881,
           },
         },
       ],
@@ -50,8 +49,8 @@ describe('Vaults', function () {
     console.log('providers');
     //get signers
     [owner, addr1, addr2, addr3, addr4, ...addrs] = await ethers.getSigners();
-    const wantHolder = '0xb0372391320b9a6316d39fe027952b5b1b10bd9d'; // ftm-tomb
-    const wantWhaleAddress = '0x6de4d784f6019aa9dc281b368023e403ea017601'; // ftm-tomb
+    const wantHolder = '0x75953a5ca5dc9a8b8f52e4e858ce61efee562c59'; // based-tomb
+    const wantWhaleAddress = '0xe5bc680f1752f5647b9e9e83cafbfee6800f24a4'; // based-tomb
     const strategistAddress = '0x3b410908e71Ee04e7dE2a87f8F9003AFe6c1c7cE';
     await hre.network.provider.request({
       method: 'hardhat_impersonateAccount',

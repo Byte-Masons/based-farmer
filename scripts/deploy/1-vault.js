@@ -1,9 +1,9 @@
 async function main() {
   const Vault = await ethers.getContractFactory('ReaperVaultv1_3');
 
-  const wantAddress = '0x7B5B3751550be4FF87aC6bda89533F7A0c9825B3';
-  const tokenName = 'BASED-MAI Based Crypt';
-  const tokenSymbol = 'rf-BASED-MAI';
+  const wantAddress = '0x172BFaA8991A54ABD0b3EE3d4F8CBDab7046FF79';
+  const tokenName = 'BASED-TOMB Based Crypt';
+  const tokenSymbol = 'rf-BASED-TOMB';
   const depositFee = 0;
   const tvlCap = ethers.utils.parseEther('2000');
   const options = { gasPrice: 200000000000, gasLimit: 9000000 };
