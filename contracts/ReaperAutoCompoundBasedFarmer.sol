@@ -4,7 +4,6 @@ import './abstract/ReaperBaseStrategy.sol';
 import './interfaces/IUniswapV2Pair.sol';
 import './interfaces/IUniswapV2Router02.sol';
 import './interfaces/IMasterChef.sol';
-import './interfaces/ICurveGauge.sol';
 import './interfaces/ICurveLiquidityPool.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol';
 
