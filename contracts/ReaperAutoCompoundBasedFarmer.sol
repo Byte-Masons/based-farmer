@@ -4,6 +4,7 @@ import './abstract/ReaperBaseStrategy.sol';
 import './interfaces/IUniswapV2Pair.sol';
 import './interfaces/IUniswapV2Router02.sol';
 import './interfaces/IMasterChef.sol';
+import './interfaces/ICurveLiquidityPool.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol';
 
 pragma solidity 0.8.11;
@@ -19,16 +20,14 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
      * {WFTM} - Required for liquidity routing when doing swaps. Also used to charge fees on yield.
      * {BSHARE} - The reward token
      * {want} - The vault token the strategy is maximizing
-     * {lpToken0} - Token 0 of the LP want token
-     * {lpToken1} - Token 1 of the LP want token
-     * {bShareUnderlying} - Whether {BSHARE} is one of the lp tokens
+     * {liquidityToken} - Part of the LP token used to deposit into and make the LP
+     * {liquidityPool} - The Curve liquidity pool to deposit into (could be Curve Tricrypto)
      */
     address public constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     address public constant BSHARE = 0x49C290Ff692149A4E16611c694fdED42C954ab7a;
     address public want;
-    address public lpToken0;
-    address public lpToken1;
-    bool public bShareUnderlying;
+    address public liquidityToken;
+    address public liquidityPool;
 
     /**
      * @dev Third Party Contracts:
@@ -41,8 +40,10 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
     /**
      * @dev Based variables:
      * {poolId} - The MasterChef poolId for the want
+     * {liquidityIndex} - The index in the Curve LP for the token used to make the LP
      */
     uint256 public poolId;
+    uint256 public liquidityIndex;
 
     /**
      * @dev Initializes the strategy. Sets parameters, saves routes, and gives allowances.
@@ -53,16 +54,17 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         address[] memory _feeRemitters,
         address[] memory _strategists,
         address _want,
+        address _liquidityPool,
+        address _liquidityToken,
+        uint256 _liquidityIndex,
         uint256 _poolId
     ) public initializer {
         __ReaperBaseStrategy_init(_vault, _feeRemitters, _strategists);
         want = _want;
+        liquidityPool = _liquidityPool;
+        liquidityToken = _liquidityToken;
+        liquidityIndex = _liquidityIndex;
         poolId = _poolId;
-        lpToken0 = IUniswapV2Pair(want).token0();
-        lpToken1 = IUniswapV2Pair(want).token1();
-        if (lpToken0 == BSHARE || lpToken1 == BSHARE) {
-            bShareUnderlying = true;
-        }
         _giveAllowances();
     }
 
@@ -124,9 +126,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         _onlyStrategistOrOwner();
 
         _claimRewards();
-        if (!bShareUnderlying) {
-            _swapTokens(BSHARE, WFTM, IERC20Upgradeable(BSHARE).balanceOf(address(this)));
-        }
+        _swapTokens(BSHARE, WFTM, IERC20Upgradeable(BSHARE).balanceOf(address(this)));
         _addLiquidity();
 
         uint256 poolBalance = balanceOfPool();
@@ -135,6 +135,15 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         }
         uint256 wantBalance = IERC20Upgradeable(want).balanceOf(address(this));
         IERC20Upgradeable(want).safeTransfer(vault, wantBalance);
+    }
+
+    /**
+     * @dev Sets the token in the curve LP used to make the LP (could be fusdt, wbtc, weth)
+     */
+    function setLiquidityInfo(address _liquidityToken, uint256 _liquidityIndex) external {
+        _onlyStrategistOrOwner();
+        liquidityToken = _liquidityToken;
+        liquidityIndex = _liquidityIndex;
     }
 
     /**
@@ -249,15 +258,8 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
      * Charges fees based on the amount of WFTM gained from reward
      */
     function _swapAndChargeFees() internal {
-        uint256 wftmFee;
-        if (bShareUnderlying) {
-            uint256 bshareFee = (IERC20Upgradeable(BSHARE).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
-            _swapTokens(BSHARE, WFTM, bshareFee);
-            wftmFee = IERC20Upgradeable(WFTM).balanceOf(address(this));
-        } else {
-            _swapTokens(BSHARE, WFTM, IERC20Upgradeable(BSHARE).balanceOf(address(this)));
-            wftmFee = (IERC20Upgradeable(WFTM).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
-        }
+        _swapTokens(BSHARE, WFTM, IERC20Upgradeable(BSHARE).balanceOf(address(this)));
+        uint256 wftmFee = (IERC20Upgradeable(WFTM).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
 
         if (wftmFee == 0) {
             return;
@@ -275,26 +277,17 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
 
     /** @dev Converts WFTM to both sides of the LP token and builds the liquidity pair */
     function _addLiquidity() internal {
-        uint256 balance = IERC20Upgradeable(bShareUnderlying ? BSHARE : WFTM).balanceOf(address(this));
-        if (balance == 0) {
+        uint256 wftmBalance = IERC20Upgradeable(WFTM).balanceOf(address(this));
+        if (wftmBalance == 0) {
             return;
         }
 
-        _swapTokens(bShareUnderlying ? BSHARE : WFTM, lpToken0, balance / 2);
-        _swapTokens(bShareUnderlying ? BSHARE : WFTM, lpToken1, balance / 2);
+        _swapTokens(WFTM, liquidityToken, wftmBalance);
 
-        uint256 lp0Bal = IERC20Upgradeable(lpToken0).balanceOf(address(this));
-        uint256 lp1Bal = IERC20Upgradeable(lpToken1).balanceOf(address(this));
-        IUniswapV2Router02(SPOOKY_ROUTER).addLiquidity(
-            lpToken0,
-            lpToken1,
-            lp0Bal,
-            lp1Bal,
-            1,
-            1,
-            address(this),
-            block.timestamp
-        );
+        uint256 liquidityTokenBalance = IERC20Upgradeable(liquidityToken).balanceOf(address(this));
+        uint256[3] memory amounts;
+        amounts[liquidityIndex] = liquidityTokenBalance;
+        ICurveLiquidityPool(liquidityPool).add_liquidity(amounts, 0);
     }
 
     /**
@@ -310,11 +303,9 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         // WFTM -> SPOOKY_ROUTER
         uint256 wftmAllowance = type(uint256).max - IERC20Upgradeable(WFTM).allowance(address(this), SPOOKY_ROUTER);
         IERC20Upgradeable(WFTM).safeIncreaseAllowance(SPOOKY_ROUTER, wftmAllowance);
-        // LP tokens -> SPOOKY_ROUTER
-        uint256 lp0Allowance = type(uint256).max - IERC20Upgradeable(lpToken0).allowance(address(this), SPOOKY_ROUTER);
-        IERC20Upgradeable(lpToken0).safeIncreaseAllowance(SPOOKY_ROUTER, lp0Allowance);
-        uint256 lp1Allowance = type(uint256).max - IERC20Upgradeable(lpToken1).allowance(address(this), SPOOKY_ROUTER);
-        IERC20Upgradeable(lpToken1).safeIncreaseAllowance(SPOOKY_ROUTER, lp1Allowance);
+        // liquidityToken -> liquidityPool
+        uint256 liquidityTokenAllowance = type(uint256).max - IERC20Upgradeable(liquidityToken).allowance(address(this), liquidityPool);
+        IERC20Upgradeable(liquidityToken).safeIncreaseAllowance(liquidityPool, liquidityTokenAllowance);
     }
 
     /**
@@ -333,13 +324,9 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
             SPOOKY_ROUTER,
             IERC20Upgradeable(WFTM).allowance(address(this), SPOOKY_ROUTER)
         );
-        IERC20Upgradeable(lpToken0).safeDecreaseAllowance(
-            SPOOKY_ROUTER,
-            IERC20Upgradeable(lpToken0).allowance(address(this), SPOOKY_ROUTER)
-        );
-        IERC20Upgradeable(lpToken1).safeDecreaseAllowance(
-            SPOOKY_ROUTER,
-            IERC20Upgradeable(lpToken1).allowance(address(this), SPOOKY_ROUTER)
+        IERC20Upgradeable(liquidityToken).safeDecreaseAllowance(
+            liquidityPool,
+            IERC20Upgradeable(liquidityToken).allowance(address(this), liquidityPool)
         );
     }
 }
