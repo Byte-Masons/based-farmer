@@ -287,7 +287,7 @@ contract ReaperAutoCompoundBasedFarmer is ReaperBaseStrategy {
         uint256 liquidityTokenBalance = IERC20Upgradeable(liquidityToken).balanceOf(address(this));
         uint256[3] memory amounts;
         amounts[liquidityIndex] = liquidityTokenBalance;
-        ICurveLiquidityPool(liquidityPool).add_liquidity(amounts, 0);
+        ICurveLiquidityPool(liquidityPool).add_liquidity(amounts, 0, true);
     }
 
     /**
